@@ -4,16 +4,20 @@ import paho.mqtt.client as mqtt
 import telnetlib
 import json
 import copy
+import time
 import argparse
 
 class Snapcast2MQTT:
     def __init__(self, brokerHost, brokerPort, rootTopic, snapcastHost, snapcastPort):
         self._rootTopic = rootTopic
         self._mqttClient = mqtt.Client()
-        self._mqttClient.connect(brokerHost, brokerPort)
-        self._mqttClient.subscribe(self._rootTopic + "in/#")
+        self._mqttClient.on_connect = self._mqtt_on_connect
         self._mqttClient.on_message = self._mqtt_on_message
-        self._snapcast = telnetlib.Telnet(snapcastHost, snapcastPort)
+        self._brokerHost = brokerHost
+        self._brokerPort = brokerPort
+        self._snapcastHost = snapcastHost
+        self._snapcastPort = snapcastPort
+        self._snapcast = telnetlib.Telnet()
         self._methodDispatcher = {
             "Client.OnVolumeChanged": self._clientVolumeChanged,
             "Client.SetVolume": self._clientVolumeChanged
@@ -27,6 +31,10 @@ class Snapcast2MQTT:
         }
         self._lastId = 0
         self._quedRequests = {}
+
+    def _mqtt_on_connect(self, client, userdata, flags, rc):
+        print("Connected with result code " + str(rc))
+        self._mqttClient.subscribe(self._rootTopic + "in/#")
 
     def _mqtt_on_message(self, client, obj, msg):
         payload = msg.payload.decode("utf-8")
@@ -93,8 +101,9 @@ class Snapcast2MQTT:
             print('sending topic: %s. payload: %s' % (topic, payload))
             self._mqttClient.publish(topic, payload)
 
-    def run(self):
-        self._mqttClient.loop_start()
+    def _telnetLoop(self):
+        print('connecting to [%s:%s]' % (self._snapcastHost, self._snapcastPort))
+        self._snapcast.open(self._snapcastHost, self._snapcastPort)
         while True:
             result = self._snapcast.read_until(b"\n")
             print('received response %s' % result.decode("utf-8").strip())
@@ -103,6 +112,16 @@ class Snapcast2MQTT:
                 self._handleResponse(notification)
             else:
                 self._handleNotification(notification)
+
+    def run(self):
+        self._mqttClient.connect_async(self._brokerHost, self._brokerPort)
+        self._mqttClient.loop_start()
+        while True:
+            try:
+                self._telnetLoop()
+            except (EOFError, ConnectionRefusedError):
+                print('lost connection')
+                time.sleep(5)
 
     def stop(self):
         self._mqttClient.loop_stop()
