@@ -1,0 +1,10 @@
+[Unit]
+Description=Snapcast JSON RPC MQTT daemon
+Requires=network.target
+
+[Service]
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/local/bin/snapcast2mqtt --snapcast-host rozpruwacz.local
+
+[Install]
+WantedBy=multi-user.target
