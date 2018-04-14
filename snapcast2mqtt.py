@@ -6,6 +6,7 @@ import json
 import copy
 import time
 import argparse
+import socket
 
 class Snapcast2MQTT:
     def __init__(self, brokerHost, brokerPort, rootTopic, snapcastHost, snapcastPort):
@@ -119,7 +120,7 @@ class Snapcast2MQTT:
         while True:
             try:
                 self._telnetLoop()
-            except (EOFError, ConnectionRefusedError):
+            except (EOFError, ConnectionRefusedError, socket.gaierror, socket.herror, socket.timeout):
                 print('lost connection')
                 time.sleep(5)
 
