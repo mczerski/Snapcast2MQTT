@@ -34,7 +34,7 @@ class Snapcast2MQTT:
         self._quedRequests = {}
 
     def _mqtt_on_connect(self, client, userdata, flags, rc):
-        print("Connected with result code " + str(rc))
+        print('connected to [%s:%s] with result code %d' % (self._brokerHost, self._brokerPort, rc))
         self._mqttClient.subscribe(self._rootTopic + "in/#")
 
     def _mqtt_on_message(self, client, obj, msg):
@@ -71,6 +71,17 @@ class Snapcast2MQTT:
                                   "params": {"id": clientId}},
                                  responseMethod)
 
+    def _getStatus(self):
+        def responseMethod(response):
+            for group in response["result"]["server"]["groups"]:
+                for client in group["clients"]:
+                    volumeData = {"method": "Client.OnVolumeChanged",
+                                  "params": {"id": client["id"], "volume": {"muted": client["config"]["volume"]["muted"], "percent": 100}}}
+                    self._handleNotification(volumeData)
+
+        return self._makeRequest({"method": "Server.GetStatus"},
+                                 responseMethod)
+
     def _makeRequest(self, data, responsMethod):
         self._lastId += 1
         data.update({"id": self._lastId, "jsonrpc": "2.0"})
@@ -103,8 +114,9 @@ class Snapcast2MQTT:
             self._mqttClient.publish(topic, payload)
 
     def _telnetLoop(self):
-        print('connecting to [%s:%s]' % (self._snapcastHost, self._snapcastPort))
         self._snapcast.open(self._snapcastHost, self._snapcastPort)
+        print('connected to [%s:%s]' % (self._snapcastHost, self._snapcastPort))
+        self._snapcast.write(self._getStatus())
         while True:
             result = self._snapcast.read_until(b"\n")
             print('received response %s' % result.decode("utf-8").strip())
@@ -120,8 +132,7 @@ class Snapcast2MQTT:
         while True:
             try:
                 self._telnetLoop()
-            except (EOFError, ConnectionRefusedError, socket.gaierror, socket.herror, socket.timeout):
-                print('lost connection')
+            except (TimeoutError, EOFError, ConnectionRefusedError, socket.gaierror, socket.herror, socket.timeout):
                 time.sleep(5)
 
     def stop(self):
