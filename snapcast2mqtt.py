@@ -11,7 +11,7 @@ import socket
 class Snapcast2MQTT:
     def __init__(self, brokerHost, brokerPort, rootTopic, snapcastHost, snapcastPort):
         self._rootTopic = rootTopic
-        self._mqttClient = mqtt.Client()
+        self._mqttClient = mqtt.Client(client_id='snapcast', clean_session=False)
         self._mqttClient.on_connect = self._mqtt_on_connect
         self._mqttClient.on_message = self._mqtt_on_message
         self._brokerHost = brokerHost
@@ -36,6 +36,7 @@ class Snapcast2MQTT:
     def _mqtt_on_connect(self, client, userdata, flags, rc):
         print('connected to [%s:%s] with result code %d' % (self._brokerHost, self._brokerPort, rc))
         self._mqttClient.subscribe(self._rootTopic + "in/#")
+        self._snapcast.write(self._getStatus())
 
     def _mqtt_on_message(self, client, obj, msg):
         payload = msg.payload.decode("utf-8")
@@ -111,7 +112,7 @@ class Snapcast2MQTT:
             print('unknown notification')
         else:
             print('sending topic: %s. payload: %s' % (topic, payload))
-            self._mqttClient.publish(topic, payload)
+            self._mqttClient.publish(topic, payload, retain=True)
 
     def _telnetLoop(self):
         self._snapcast.open(self._snapcastHost, self._snapcastPort)
