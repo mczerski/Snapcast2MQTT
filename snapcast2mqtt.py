@@ -21,7 +21,8 @@ class Snapcast2MQTT:
         self._snapcast = telnetlib.Telnet()
         self._methodDispatcher = {
             "Client.OnVolumeChanged": self._clientVolumeChanged,
-            "Client.SetVolume": self._clientVolumeChanged
+            "Client.SetVolume": self._clientVolumeChanged,
+            "Client.OnConnect": self._clientOnConnect,
         }
         self._topicDispatcher = {
             "client" : self._clientTopicDispatcher
@@ -36,7 +37,10 @@ class Snapcast2MQTT:
     def _mqtt_on_connect(self, client, userdata, flags, rc):
         print('connected to [%s:%s] with result code %d' % (self._brokerHost, self._brokerPort, rc))
         self._mqttClient.subscribe(self._rootTopic + "in/#")
-        self._snapcast.write(self._getStatus())
+        try:
+            self._snapcast.write(self._getStatus())
+        except BaseException as e:
+            print(e)
 
     def _mqtt_on_message(self, client, obj, msg):
         payload = msg.payload.decode("utf-8")
@@ -44,8 +48,11 @@ class Snapcast2MQTT:
         parts = msg.topic.split("/")[1:]
         method = self._topicDispatcher.get(parts[0], lambda payload, *parts: None)
         request = method(payload, *parts[1:])
-        self._snapcast.write(request)
-        print ('sent request: %s' % request.decode('utf-8').strip())
+        try:
+            self._snapcast.write(request)
+            print ('sent request: %s' % request.decode('utf-8').strip())
+        except BaseException as e:
+            print(e)
 
     def _clientTopicDispatcher(self, payload, clientId, command, *parts):
         method = self._clientDispatcher.get(command, lambda payload, clientId, *parts: None)
@@ -102,6 +109,9 @@ class Snapcast2MQTT:
     def _clientVolumeChanged(self, params):
         return self._makeTopic("client", params["id"], "mute"), str(int(params["volume"]["muted"]))
 
+    def _clientOnConnect(self, params):
+        return self._makeTopic("client", params["id"], "mute"), str(int(params["client"]["config"]["volume"]["muted"]))
+
     def _convertToTopic(self, method, params):
         method = self._methodDispatcher.get(method, lambda params: (None, None))
         return method(params)
@@ -120,7 +130,7 @@ class Snapcast2MQTT:
         self._snapcast.write(self._getStatus())
         while True:
             result = self._snapcast.read_until(b"\n")
-            print('received response %s' % result.decode("utf-8").strip())
+            print('received snapcast message %s' % result.decode("utf-8").strip())
             notification = json.loads(result.decode("utf-8"))
             if "id" in notification:
                 self._handleResponse(notification)
