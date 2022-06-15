@@ -60,12 +60,12 @@ class Snapcast2MQTT:
 
     def _clientMute(self, payload, clientId):
         data = {"method": "Client.SetVolume",
-                "params": {"id": clientId, "volume": {"muted": bool(int(payload)), "percent": 100}}}
+                "params": {"id": clientId, "volume": {"muted": bool(int(payload))}}}
         def responseMethod(response):
             self._handleNotification(data)
 
         return self._makeRequest({"method": "Client.SetVolume",
-                                  "params": {"id": clientId, "volume": {"muted": bool(int(payload)), "percent": 100}}},
+                                  "params": {"id": clientId, "volume": {"muted": bool(int(payload))}}},
                                  responseMethod)
 
     def _clientStatus(self, payload, clientId):
@@ -73,7 +73,7 @@ class Snapcast2MQTT:
             clientId = response["result"]["client"]["id"]
             mute = response["result"]["client"]["config"]["volume"]["muted"]
             volumeData = {"method": "Client.OnVolumeChanged",
-                          "params": {"id": clientId, "volume": {"muted": mute, "percent": 100}}}
+                          "params": {"id": clientId, "volume": {"muted": mute}}}
             self._handleNotification(volumeData)
         return self._makeRequest({"method": "Client.GetStatus",
                                   "params": {"id": clientId}},
@@ -84,7 +84,7 @@ class Snapcast2MQTT:
             for group in response["result"]["server"]["groups"]:
                 for client in group["clients"]:
                     volumeData = {"method": "Client.OnVolumeChanged",
-                                  "params": {"id": client["id"], "volume": {"muted": client["config"]["volume"]["muted"], "percent": 100}}}
+                                  "params": {"id": client["id"], "volume": {"muted": client["config"]["volume"]["muted"]}}}
                     self._handleNotification(volumeData)
 
         return self._makeRequest({"method": "Server.GetStatus"},
